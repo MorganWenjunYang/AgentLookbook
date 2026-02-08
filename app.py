@@ -3,11 +3,20 @@
 from __future__ import annotations
 
 import concurrent.futures
+import logging
 import time
 import traceback
 
 import pandas as pd
 import streamlit as st
+
+# ── Configure logging ─────────────────────────────────────────────
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    datefmt="%H:%M:%S",
+)
+logger = logging.getLogger(__name__)
 
 # ── bootstrap: must be importable from project root ───────────────
 import sys, pathlib  # noqa: E401
@@ -24,6 +33,19 @@ st.set_page_config(
     page_icon="🔬",
     layout="wide",
 )
+
+# ── global custom CSS ─────────────────────────────────────────────
+st.markdown("""
+<style>
+div[data-testid="stExpander"] {
+    border-radius: 8px;
+}
+/* Clean up default container borders so our accent borders take over */
+div[data-testid="stVerticalBlockBorderWrapper"] {
+    transition: box-shadow 0.2s ease;
+}
+</style>
+""", unsafe_allow_html=True)
 
 # ── .env defaults per provider ────────────────────────────────────
 _ENV_DEFAULTS: dict[str, dict[str, str]] = {
@@ -107,6 +129,7 @@ def _build_tools() -> ToolRegistry:
 # ── helper: run one agent ─────────────────────────────────────────
 def _run_agent(paradigm_name: str, query: str) -> tuple[str, AgentResult | str]:
     """Returns (paradigm_name, AgentResult) or (paradigm_name, error_string)."""
+    logger.info(f"[{paradigm_name}] Starting...")
     try:
         llm = _build_llm()
         tools = _build_tools()
@@ -115,6 +138,7 @@ def _run_agent(paradigm_name: str, query: str) -> tuple[str, AgentResult | str]:
 
         # Time the agent run
         start_time = time.time()
+        logger.info(f"[{paradigm_name}] Calling agent.run()...")
         result = agent.run(query)
         elapsed = time.time() - start_time
 
@@ -128,8 +152,10 @@ def _run_agent(paradigm_name: str, query: str) -> tuple[str, AgentResult | str]:
             "total_tokens": stats["total_tokens"],
         }
 
+        logger.info(f"[{paradigm_name}] Completed in {elapsed:.2f}s, {stats['call_count']} LLM calls, {stats['total_tokens']} tokens")
         return paradigm_name, result
-    except Exception:
+    except Exception as e:
+        logger.error(f"[{paradigm_name}] Failed: {e}")
         return paradigm_name, traceback.format_exc()
 
 
@@ -145,21 +171,64 @@ _STEP_COLORS = {
     "error": "❌",
 }
 
+# ── accent color palette per paradigm (muted, modern) ────────────
+_ACCENT_COLORS: dict[str, str] = {
+    "Vanilla":     "#868e96",   # cool gray
+    "CoT":         "#5c7cfa",   # soft indigo
+    "ReAct":       "#339af0",   # calm blue
+    "Reflexion":   "#845ef7",   # gentle violet
+    "ToT":         "#51cf66",   # light green
+    "GoT":         "#f06595",   # soft rose
+    "CodeAct":     "#22b8cf",   # muted cyan
+    "InterCode":   "#ff922b",   # warm tangerine
+    "ADaPT":       "#ff6b6b",   # soft coral
+    "AdaPlanner":  "#20c997",   # fresh mint
+}
 
-def _render_collapsed_card(name: str, result: AgentResult | str) -> None:
-    """Render a collapsed card showing only summary."""
-    desc = AGENT_REGISTRY[name].paradigm_description
-    st.markdown(f"**{name}**")
-    st.caption(desc)
+def _accent(name: str) -> str:
+    """Return the accent color for a paradigm, with a fallback."""
+    return _ACCENT_COLORS.get(name, "#5c7cfa")
 
-    if isinstance(result, str):
-        st.error("Failed")
-    else:
-        # Show answer summary (first 80 chars)
-        answer_preview = result.answer[:80] + "..." if len(result.answer) > 80 else result.answer
-        st.info(answer_preview)
-        # Show key metrics as badges
-        st.caption(f"⏱ {result.elapsed_time:.1f}s | 📞 {result.llm_calls} calls | 🎫 {result.token_usage.get('total_tokens', 0)} tokens")
+
+def _render_collapsed_strip(name: str, result: AgentResult | str) -> None:
+    """Render a collapsed book-spine style strip – each letter rotated 90° CW, read top→bottom."""
+    color = _accent(name)
+    # Build one <span> per character, each rotated 90 degrees clockwise
+    letters_html = "".join(
+        f'<span style="display:block; transform:rotate(90deg); line-height:1.15;">{ch}</span>'
+        if ch != " "
+        else '<span style="display:block; height:6px;"></span>'
+        for ch in name
+    )
+    st.markdown(f'''
+    <div style="
+        min-height: 240px;
+        padding: 20px 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        background: {color}0a;
+        border-left: 3px solid {color};
+        border-radius: 6px;
+        box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+        cursor: pointer;
+        transition: box-shadow 0.2s ease;
+    ">
+        <div style="
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 1px;
+            font-weight: 700;
+            font-size: 13px;
+            color: {color};
+            letter-spacing: 0.5px;
+        ">
+            {letters_html}
+        </div>
+    </div>
+    ''', unsafe_allow_html=True)
 
 
 def _render_expanded_card(name: str, result: AgentResult | str) -> None:
@@ -174,24 +243,21 @@ def _render_expanded_card(name: str, result: AgentResult | str) -> None:
         st.code(result, language="text")
         return
 
-    # Metrics row
-    col1, col2, col3 = st.columns(3)
-    col1.metric("Time", f"{result.elapsed_time:.2f}s")
-    col2.metric("LLM Calls", result.llm_calls)
-    col3.metric("Total Tokens", result.token_usage.get("total_tokens", 0))
-
     # Thinking process
-    st.markdown("#### Thinking Process")
-    for step in result.steps:
-        icon = _STEP_COLORS.get(step.type, "📝")
-        st.markdown(f"{icon} **{step.type.upper()}**")
-        st.markdown(step.content)
-        if step.metadata:
-            st.caption(f"metadata: {step.metadata}")
-        st.markdown("---")
+    with st.expander("Thinking Process", expanded=True):
+        for step in result.steps:
+            icon = _STEP_COLORS.get(step.type, "📝")
+            st.markdown(f"{icon} **{step.type.upper()}**")
+            st.markdown(step.content)
+            if step.metadata:
+                st.caption(f"metadata: {step.metadata}")
+            st.markdown("---")
 
     # Final answer
-    st.success(f"**Answer:** {result.answer}")
+    st.success(result.answer)
+
+    # Metrics at the bottom as small text
+    st.caption(f"⏱ {result.elapsed_time:.2f}s | 📞 {result.llm_calls} calls | 🎫 {result.token_usage.get('total_tokens', 0)} tokens")
 
 
 def _render_metrics_table(results: dict[str, AgentResult | str], selected_paradigms: list[str]) -> None:
@@ -223,20 +289,21 @@ def _render_metrics_table(results: dict[str, AgentResult | str], selected_paradi
 
 
 # ── session state for horizontal expand ───────────────────────────
-if "expanded_agent" not in st.session_state:
-    st.session_state.expanded_agent = None
+# Use collapsed_agents set - default is empty (all expanded)
+if "collapsed_agents" not in st.session_state:
+    st.session_state.collapsed_agents = set()
 if "results" not in st.session_state:
     st.session_state.results = {}
 if "last_selected_paradigms" not in st.session_state:
     st.session_state.last_selected_paradigms = []
 
 
-def _toggle_expand(name: str) -> None:
-    """Toggle expand/collapse for a card."""
-    if st.session_state.expanded_agent == name:
-        st.session_state.expanded_agent = None
+def _toggle_collapse(name: str) -> None:
+    """Toggle collapse/expand for a card."""
+    if name in st.session_state.collapsed_agents:
+        st.session_state.collapsed_agents.discard(name)
     else:
-        st.session_state.expanded_agent = name
+        st.session_state.collapsed_agents.add(name)
 
 
 # ── main area ─────────────────────────────────────────────────────
@@ -260,8 +327,8 @@ if run_button:
         st.warning("Please enter your API key in the sidebar.")
         st.stop()
 
-    # Reset expanded state on new run
-    st.session_state.expanded_agent = None
+    # Reset collapsed state on new run (all expanded by default)
+    st.session_state.collapsed_agents = set()
     st.session_state.last_selected_paradigms = selected_paradigms.copy()
 
     # Run all selected paradigms in parallel
@@ -282,46 +349,66 @@ if run_button:
 if st.session_state.results and st.session_state.last_selected_paradigms:
     results = st.session_state.results
     paradigm_list = st.session_state.last_selected_paradigms
-    expanded = st.session_state.expanded_agent
+    collapsed = st.session_state.collapsed_agents
 
-    # ── Metrics comparison table ──────────────────────────────────
-    st.markdown("### 📊 Metrics Comparison")
-    _render_metrics_table(results, paradigm_list)
-
-    st.markdown("---")
+    # ── Agent Results (cards first) ───────────────────────────────
     st.markdown("### 🔍 Agent Results")
-    st.caption("Click a card to expand/collapse. Only one card can be expanded at a time.")
+    st.caption("Click a card to collapse/expand.")
 
-    # ── Calculate column widths based on expanded state ───────────
-    n = len(paradigm_list)
-    if expanded and expanded in paradigm_list:
-        # Expanded card gets 3x width, others get 1x
-        widths = []
-        for name in paradigm_list:
-            if name == expanded:
-                widths.append(3)
-            else:
-                widths.append(1)
-    else:
-        # All equal width
-        widths = [1] * n
+    # ── Calculate column widths based on collapsed state ──────────
+    # Collapsed cards get width 1 (narrow strip), expanded get width 6
+    widths = []
+    for name in paradigm_list:
+        if name in collapsed:
+            widths.append(1)  # narrow book-spine
+        else:
+            widths.append(6)  # full width
+
+    # ── Inject accent CSS for expanded cards (marker + :has selector) ─
+    card_css_rules = ""
+    for name in paradigm_list:
+        c = _accent(name)
+        safe = name.replace(" ", "-").lower()
+        card_css_rules += f"""
+        div[data-testid="stVerticalBlockBorderWrapper"]:has(.card-marker-{safe}) {{
+            border: 1px solid rgba(0,0,0,0.08) !important;
+            border-top: 3px solid {c} !important;
+            border-radius: 8px !important;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06) !important;
+        }}
+        """
+    st.markdown(f"<style>{card_css_rules}</style>", unsafe_allow_html=True)
 
     # ── Render cards in columns ───────────────────────────────────
     cols = st.columns(widths)
     for col, name in zip(cols, paradigm_list):
         with col:
             result = results.get(name, "No result")
-            is_expanded = (expanded == name)
+            is_collapsed = (name in collapsed)
+            color = _accent(name)
+            safe = name.replace(" ", "-").lower()
 
-            # Card container with border
-            with st.container(border=True):
-                # Toggle button
-                btn_label = "▼ Collapse" if is_expanded else "▶ Expand"
-                if st.button(btn_label, key=f"toggle_{name}", use_container_width=True):
-                    _toggle_expand(name)
+            if is_collapsed:
+                # Collapsed spine strip – entire thing is clickable
+                _render_collapsed_strip(name, result)
+                if st.button(name, key=f"toggle_{name}", use_container_width=True):
+                    _toggle_collapse(name)
                     st.rerun()
-
-                if is_expanded:
+            else:
+                # Expanded card with glow border
+                with st.container(border=True):
+                    # Invisible marker so CSS :has() can target this container
+                    st.markdown(
+                        f'<div class="card-marker-{safe}" style="display:none;"></div>',
+                        unsafe_allow_html=True,
+                    )
+                    # Clickable header to collapse
+                    if st.button(f"▼ {name}", key=f"toggle_{name}", use_container_width=True, type="tertiary"):
+                        _toggle_collapse(name)
+                        st.rerun()
                     _render_expanded_card(name, result)
-                else:
-                    _render_collapsed_card(name, result)
+
+    # ── Metrics comparison table (below cards) ────────────────────
+    st.markdown("---")
+    st.markdown("### 📊 Metrics Comparison")
+    _render_metrics_table(results, paradigm_list)

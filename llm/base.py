@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 import json
+import logging
 from abc import ABC, abstractmethod
 
 import requests
+
+logger = logging.getLogger(__name__)
 
 
 class LLMClient(ABC):
@@ -57,12 +60,16 @@ class OpenAICompatibleClient(LLMClient):
         if stop:
             payload["stop"] = stop
 
+        logger.debug(f"[LLM] Calling {self.model} (call #{self.call_count + 1})...")
+        start = __import__("time").time()
         resp = requests.post(url, headers=headers, json=payload, timeout=120)
         resp.raise_for_status()
         data = resp.json()
+        api_time = __import__("time").time() - start
 
         # Track metrics from usage field
         self.call_count += 1
+        logger.debug(f"[LLM] Call #{self.call_count} completed in {api_time:.2f}s")
         if "usage" in data:
             usage = data["usage"]
             self.total_prompt_tokens += usage.get("prompt_tokens", 0)
