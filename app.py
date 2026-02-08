@@ -14,6 +14,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 from agents import AGENT_REGISTRY, AgentResult, BaseAgent  # noqa: E402
 from llm import QwenClient, GLMClient, DeepSeekClient  # noqa: E402
 from tools import ToolRegistry, CalculatorTool, WikiSearchTool  # noqa: E402
+import config  # noqa: E402
 
 # ── page config ───────────────────────────────────────────────────
 st.set_page_config(
@@ -21,6 +22,13 @@ st.set_page_config(
     page_icon="🔬",
     layout="wide",
 )
+
+# ── .env defaults per provider ────────────────────────────────────
+_ENV_DEFAULTS: dict[str, dict[str, str]] = {
+    "Qwen": {"api_key": config.QWEN_API_KEY, "model": config.QWEN_MODEL},
+    "GLM": {"api_key": config.GLM_API_KEY, "model": config.GLM_MODEL},
+    "DeepSeek": {"api_key": config.DEEPSEEK_API_KEY, "model": config.DEEPSEEK_MODEL},
+}
 
 # ── sidebar: LLM provider config ─────────────────────────────────
 st.sidebar.title("Agent Lookbook")
@@ -32,16 +40,25 @@ provider = st.sidebar.selectbox(
     index=0,
 )
 
+_defaults = _ENV_DEFAULTS.get(provider, {})
+_env_key = _defaults.get("api_key", "")
+_env_model = _defaults.get("model", "")
+
 api_key = st.sidebar.text_input(
     "API Key",
+    value=_env_key,
     type="password",
-    help="Your API key for the selected provider.",
+    help="Auto-filled from .env if available. Override as needed.",
 )
 
 model_override = st.sidebar.text_input(
-    "Model (optional override)",
-    placeholder="Leave blank for default",
+    "Model",
+    value=_env_model,
+    help="Auto-filled from .env. Change to use a different model.",
 )
+
+if _env_key:
+    st.sidebar.caption(f"✅ API key loaded from .env for {provider}")
 
 # ── sidebar: paradigm selector ────────────────────────────────────
 st.sidebar.markdown("---")
@@ -61,7 +78,7 @@ if not selected_paradigms:
 
 # ── helper: build LLM client ─────────────────────────────────────
 def _build_llm():
-    kwargs = {}
+    kwargs: dict[str, str] = {}
     if api_key:
         kwargs["api_key"] = api_key
     if model_override:
