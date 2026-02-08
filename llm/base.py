@@ -31,6 +31,10 @@ class OpenAICompatibleClient(LLMClient):
         self.api_key = api_key
         self.base_url = base_url.rstrip("/")
         self.model = model
+        # Metrics tracking
+        self.call_count: int = 0
+        self.total_prompt_tokens: int = 0
+        self.total_completion_tokens: int = 0
 
     # ── public interface ──────────────────────────────────────────
 
@@ -57,6 +61,13 @@ class OpenAICompatibleClient(LLMClient):
         resp.raise_for_status()
         data = resp.json()
 
+        # Track metrics from usage field
+        self.call_count += 1
+        if "usage" in data:
+            usage = data["usage"]
+            self.total_prompt_tokens += usage.get("prompt_tokens", 0)
+            self.total_completion_tokens += usage.get("completion_tokens", 0)
+
         # Standard OpenAI-compatible response shape
         try:
             return data["choices"][0]["message"]["content"]
@@ -64,6 +75,15 @@ class OpenAICompatibleClient(LLMClient):
             raise ValueError(
                 f"Unexpected response structure: {json.dumps(data, ensure_ascii=False)[:500]}"
             ) from exc
+
+    def get_stats(self) -> dict:
+        """Return aggregated metrics for this client instance."""
+        return {
+            "call_count": self.call_count,
+            "prompt_tokens": self.total_prompt_tokens,
+            "completion_tokens": self.total_completion_tokens,
+            "total_tokens": self.total_prompt_tokens + self.total_completion_tokens,
+        }
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}(model={self.model!r}, base_url={self.base_url!r})"

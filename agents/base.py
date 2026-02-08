@@ -28,6 +28,8 @@ class AgentResult:
     answer: str
     steps: list[ThinkStep] = field(default_factory=list)
     token_usage: dict = field(default_factory=dict)
+    elapsed_time: float = 0.0  # seconds
+    llm_calls: int = 0
 
 
 class BaseAgent(ABC):

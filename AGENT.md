@@ -64,6 +64,7 @@
 | **ToT** | BFS over multiple reasoning paths: generate, evaluate, select the best | [Tree of Thoughts: Deliberate Problem Solving with Large Language Models (Yao et al., 2023 -- NeurIPS)](https://arxiv.org/abs/2305.10601) | [princeton-nlp/tree-of-thought-llm](https://github.com/princeton-nlp/tree-of-thought-llm) |
 | **GoT** | Graph-based reasoning: decompose, solve sub-problems, aggregate, refine | [Graph of Thoughts: Solving Elaborate Problems with Large Language Models (Besta et al., 2024 -- AAAI)](https://arxiv.org/abs/2308.09687) | [spcl/graph-of-thoughts](https://github.com/spcl/graph-of-thoughts) |
 | **AdaPlanner** | Adaptive plan-then-execute with in-plan and out-of-plan refinement from feedback | [AdaPlanner: Adaptive Planning from Feedback with Language Models (Sun et al., 2023 -- NeurIPS)](https://arxiv.org/abs/2305.16653) | [haotiansun14/AdaPlanner](https://github.com/haotiansun14/AdaPlanner) |
+| **ADaPT** | As-needed recursive decomposition: try directly, decompose only on failure | [ADaPT: As-Needed Decomposition and Planning with Language Models (Prasad et al., 2023 -- NAACL)](https://arxiv.org/abs/2311.05772) | [archiki/ADaPT](https://github.com/archiki/ADaPT) |
 
 ### Planned
 
