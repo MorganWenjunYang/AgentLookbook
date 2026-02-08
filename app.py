@@ -297,6 +297,12 @@ if "results" not in st.session_state:
     st.session_state.results = {}
 if "last_selected_paradigms" not in st.session_state:
     st.session_state.last_selected_paradigms = []
+if "running" not in st.session_state:
+    st.session_state.running = False
+if "run_query" not in st.session_state:
+    st.session_state.run_query = ""
+if "run_paradigms" not in st.session_state:
+    st.session_state.run_paradigms = []
 
 
 def _toggle_collapse(name: str) -> None:
@@ -331,7 +337,7 @@ def _load_gsm8k_questions() -> list[str]:
 _gsm8k_questions = _load_gsm8k_questions()
 
 # ── main area ─────────────────────────────────────────────────────
-st.title("🔬 Agent Lookbook")
+st.title("🔬 Agent Paradigm Lookbook")
 st.caption("Send the same query to multiple agent paradigms and compare their reasoning.")
 
 # Build dropdown options: "Custom" + GSM8K questions (truncated for display)
@@ -341,10 +347,13 @@ _display_options = [_CUSTOM_OPTION] + [
     for i, q in enumerate(_gsm8k_questions)
 ]
 
+_is_running = st.session_state.running
+
 selected_option = st.selectbox(
     "Select a question",
     options=_display_options,
     index=0,
+    disabled=_is_running,
     help="Choose a question from the GSM8K training set, or select 'Custom' to type your own.",
 )
 
@@ -353,6 +362,7 @@ if selected_option == _CUSTOM_OPTION:
         "Your question",
         placeholder="e.g. What is 23 * 47 + 12? / Explain how photosynthesis works.",
         height=100,
+        disabled=_is_running,
     )
 else:
     # Extract the index from the selected option (format: "Q{i+1}: ...")
@@ -360,8 +370,9 @@ else:
     query = _gsm8k_questions[_selected_idx]
     st.info(f"**Selected question:** {query}")
 
-run_button = st.button("Run", type="primary", use_container_width=True)
+run_button = st.button("Run", type="primary", use_container_width=True, disabled=_is_running)
 
+# ── Phase 1: user clicks Run → save query, set running, rerun ────
 if run_button:
     if not query.strip():
         st.warning("Please enter a question.")
@@ -371,23 +382,37 @@ if run_button:
         st.warning("Please enter your API key in the sidebar.")
         st.stop()
 
+    # Save the query and paradigms, flip running flag
+    st.session_state.running = True
+    st.session_state.run_query = query.strip()
+    st.session_state.run_paradigms = selected_paradigms.copy()
+    st.rerun()  # rerun so widgets render as disabled
+
+# ── Phase 2: running flag is set → execute agents ────────────────
+if _is_running:
+    _run_q = st.session_state.run_query
+    _run_p = st.session_state.run_paradigms
+
     # Reset collapsed state on new run (all expanded by default)
     st.session_state.collapsed_agents = set()
-    st.session_state.last_selected_paradigms = selected_paradigms.copy()
+    st.session_state.last_selected_paradigms = _run_p
 
-    # Run all selected paradigms in parallel
     with st.spinner("Running agents..."):
-        results: dict[str, AgentResult | str] = {}
-        with concurrent.futures.ThreadPoolExecutor(max_workers=len(selected_paradigms)) as pool:
+        results: dict = {}
+        with concurrent.futures.ThreadPoolExecutor(max_workers=len(_run_p)) as pool:
             futures = {
-                pool.submit(_run_agent, name, query.strip()): name
-                for name in selected_paradigms
+                pool.submit(_run_agent, name, _run_q): name
+                for name in _run_p
             }
             for future in concurrent.futures.as_completed(futures):
                 paradigm_name, result = future.result()
                 results[paradigm_name] = result
 
         st.session_state.results = results
+
+    # Done → unlock widgets and rerun
+    st.session_state.running = False
+    st.rerun()
 
 # Display results if we have any
 if st.session_state.results and st.session_state.last_selected_paradigms:
