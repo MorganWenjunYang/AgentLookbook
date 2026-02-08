@@ -1,5 +1,9 @@
 # Agent Lookbook
 
+<p align="center">
+  <img src="assets/cover.svg" alt="Agent Lookbook Cover" width="100%"/>
+</p>
+
 A from-scratch experiment comparing LLM agent paradigms side by side -- no frameworks, just raw API calls.
 
 Each paradigm (CoT, ReAct, CodeAct, Reflexion, InterCode, ...) is implemented as a self-contained Python class that talks to LLM APIs via `requests.post()`. A Streamlit UI lets you send the same query to multiple paradigms simultaneously and compare their reasoning traces.
