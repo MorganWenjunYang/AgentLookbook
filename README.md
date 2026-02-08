@@ -41,6 +41,7 @@ streamlit run app.py
 | **InterCode** | Interactive coding with execution feedback | [Yang et al., 2023](https://arxiv.org/abs/2306.14898) |
 | **ToT** | BFS over multiple reasoning paths, evaluate & select best | [Yao et al., 2023](https://arxiv.org/abs/2305.10601) |
 | **GoT** | Decompose, solve sub-problems, aggregate, refine | [Besta et al., 2024](https://arxiv.org/abs/2308.09687) |
+| **AdaPlanner** | Adaptive plan-execute with in-plan & out-of-plan refinement | [Sun et al., 2023](https://arxiv.org/abs/2305.16653) |
 
 ## Project Structure
 
@@ -60,7 +61,8 @@ AgentLookbook/
 │   ├── reflexion.py       # Reflexion
 │   ├── intercode.py       # InterCode
 │   ├── tot.py             # Tree of Thoughts
-│   └── got.py             # Graph of Thoughts
+│   ├── got.py             # Graph of Thoughts
+│   └── adaplanner.py      # AdaPlanner
 │
 ├── llm/                   # Raw HTTP LLM clients (no SDK)
 │   ├── base.py            # LLMClient ABC + OpenAICompatibleClient
@@ -125,7 +127,7 @@ Then add `import agents.your_paradigm` to `agents/__init__.py` -- it auto-appear
 
 ## Roadmap
 
-- [x] Phase 1: Single-turn comparison (Vanilla, CoT, ReAct, CodeAct, Reflexion, InterCode, ToT, GoT)
+- [x] Phase 1: Single-turn comparison (Vanilla, CoT, ReAct, CodeAct, Reflexion, InterCode, ToT, GoT, AdaPlanner)
 - [ ] Phase 2: Multi-turn conversation with memory retention
 - [ ] Phase 3: Real tool integration, evaluation benchmarks (GSM8K, etc.)
 - [ ] More paradigms: ReWOO, BOLAA, ADaPT, ReCode
