@@ -12,6 +12,7 @@ import agents.tot         # noqa: F401
 import agents.got         # noqa: F401
 import agents.adaplanner  # noqa: F401
 import agents.adapt       # noqa: F401
+import agents.recode      # noqa: F401
 
 __all__ = [
     "BaseAgent",

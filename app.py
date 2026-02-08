@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import concurrent.futures
+import json
 import logging
 import time
 import traceback
@@ -306,15 +307,58 @@ def _toggle_collapse(name: str) -> None:
         st.session_state.collapsed_agents.add(name)
 
 
+# ── load GSM8K training questions ─────────────────────────────────
+_GSM8K_PATH = pathlib.Path(__file__).resolve().parent / "grade-school-math" / "grade_school_math" / "data" / "train.jsonl"
+
+
+@st.cache_data
+def _load_gsm8k_questions() -> list[str]:
+    """Load questions from the GSM8K train.jsonl file."""
+    questions: list[str] = []
+    if _GSM8K_PATH.exists():
+        with open(_GSM8K_PATH, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if line:
+                    try:
+                        obj = json.loads(line)
+                        questions.append(obj["question"])
+                    except (json.JSONDecodeError, KeyError):
+                        continue
+    return questions
+
+
+_gsm8k_questions = _load_gsm8k_questions()
+
 # ── main area ─────────────────────────────────────────────────────
 st.title("🔬 Agent Lookbook")
 st.caption("Send the same query to multiple agent paradigms and compare their reasoning.")
 
-query = st.text_area(
-    "Your question",
-    placeholder="e.g. What is 23 * 47 + 12? / Explain how photosynthesis works.",
-    height=100,
+# Build dropdown options: "Custom" + GSM8K questions (truncated for display)
+_CUSTOM_OPTION = "✏️ Custom (type your own question)"
+_display_options = [_CUSTOM_OPTION] + [
+    f"Q{i+1}: {q[:90]}{'…' if len(q) > 90 else ''}"
+    for i, q in enumerate(_gsm8k_questions)
+]
+
+selected_option = st.selectbox(
+    "Select a question",
+    options=_display_options,
+    index=0,
+    help="Choose a question from the GSM8K training set, or select 'Custom' to type your own.",
 )
+
+if selected_option == _CUSTOM_OPTION:
+    query = st.text_area(
+        "Your question",
+        placeholder="e.g. What is 23 * 47 + 12? / Explain how photosynthesis works.",
+        height=100,
+    )
+else:
+    # Extract the index from the selected option (format: "Q{i+1}: ...")
+    _selected_idx = _display_options.index(selected_option) - 1  # -1 for the Custom option
+    query = _gsm8k_questions[_selected_idx]
+    st.info(f"**Selected question:** {query}")
 
 run_button = st.button("Run", type="primary", use_container_width=True)
 
