@@ -141,9 +141,9 @@ Then add `import agents.your_paradigm` to `agents/__init__.py` -- it auto-appear
 purely AI work, ingest papers and online sources, official/unofficial implementations
 
 ### TODO
-- [] Check/review all the implementation
-- [] expose system prompt to help understanding
-- [] review the metrics implementation, some LLM calls seems untrustworthy
-- [] Multi-round conversation
+- [ ] Check/review all the implementation
+- [ ] expose system prompt to help understanding
+- [ ] review the metrics implementation, some LLM calls seems untrustworthy
+- [ ] Multi-round conversation
 
 ## License
