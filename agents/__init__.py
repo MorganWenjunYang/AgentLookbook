@@ -8,6 +8,8 @@ import agents.react       # noqa: F401
 import agents.codeact     # noqa: F401
 import agents.reflexion   # noqa: F401
 import agents.intercode   # noqa: F401
+import agents.tot         # noqa: F401
+import agents.got         # noqa: F401
 
 __all__ = [
     "BaseAgent",
